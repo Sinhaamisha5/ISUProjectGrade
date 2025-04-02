@@ -7,6 +7,7 @@ def setup():
 
 def get_grade_point():
     file_path = "Ghana List.xlsx"
+    
 
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Error: The file '{file_path}' was not found.")

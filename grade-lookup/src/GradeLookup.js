@@ -22,7 +22,7 @@ export default function GradeLookup() {
 
         setLoading(true);
         try {
-            const encodedGrade = encodeURIComponent(grade); // Encode "A+" as "A%2B"
+            const encodedGrade = encodeURIComponent(grade);
             const response = await fetch(
                 `${apiEndpoints[selectedCountry]}?university=${university}&grade=${encodedGrade}`
             );
@@ -128,6 +128,7 @@ export default function GradeLookup() {
                     >
                         {loading ? "Fetching..." : "Get Equivalent Score"}
                     </button>
+
                     {result && (
                         <div style={{
                             background: "#fff",
@@ -142,7 +143,21 @@ export default function GradeLookup() {
                             <p><strong>University:</strong> {result.university}</p>
                             <p><strong>Grade:</strong> {result.grade}</p>
                             <p><strong>Format:</strong> {result.format}</p>
-                            <p><strong>US Equivalent Scores:</strong> {result.us_equivalent_scores.join(", ")}</p>
+                            {result.us_equivalent_scores && (
+                                <p><strong>US Equivalent Scores:</strong> {result.us_equivalent_scores.join(", ")}</p>
+                            )}
+                            {result.closest_grade_matches && (
+                                <div style={{ marginTop: "10px" }}>
+                                    <p><strong>Closest Grade Matches:</strong></p>
+                                    <ul style={{ listStyle: "none", padding: 0 }}>
+                                        {result.closest_grade_matches.map((match, idx) => (
+                                            <li key={idx}>
+                                                Grade: <strong>{match.grade}</strong> → US Score: <strong>{match.us_score}</strong>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -150,3 +165,4 @@ export default function GradeLookup() {
         </div>
     );
 }
+
