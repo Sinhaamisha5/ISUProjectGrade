@@ -8,10 +8,10 @@ export default function GradeLookup() {
     const [loading, setLoading] = useState(false);
 
     const apiEndpoints = {
-        ghana: "http://localhost:5000/get_grade_point",
-        china: "http://localhost:5000/get_China_grade_point",
-        nigeria: "http://localhost:5000/get_Nigeria_grade_point",
-        india: "http://localhost:5000/get_India_grade_point",
+        ghana: "http://170.9.243.127:5000/get_grade_point",
+        china: "http://170.9.243.127:5000/get_China_grade_point",
+        nigeria: "http://170.9.243.127:5000/get_Nigeria_grade_point",
+        india: "http://170.9.243.127:5000/get_India_grade_point",
     };
 
     const fetchGradePoint = async () => {

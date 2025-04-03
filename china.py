@@ -11,15 +11,15 @@ def get_grade_point_china():
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Error: The file '{file_path}' was not found.")
 
-    xls = pd.ExcelFile(file_path)
+    xls = pd.ExcelFile(file_path, engine='openpyxl')
     required_sheets = ["China University List", "China Formats"]
     missing_sheets = [sheet for sheet in required_sheets if sheet not in xls.sheet_names]
 
     if missing_sheets:
         raise ValueError(f"Missing required sheets: {missing_sheets}")
 
-    university_df = pd.read_excel(xls, sheet_name="China University List")
-    format_df = pd.read_excel(xls, sheet_name="China Formats", header=None)
+    university_df = pd.read_excel(xls, sheet_name="China University List", engine='openpyxl')
+    format_df = pd.read_excel(xls, sheet_name="China Formats", header=None, engine='openpyxl')
     format_df.rename(columns={0: "Format"}, inplace=True)
 
     university_df.columns = university_df.columns.str.strip()
