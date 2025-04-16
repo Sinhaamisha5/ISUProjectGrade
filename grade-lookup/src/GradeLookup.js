@@ -6,12 +6,70 @@ export default function GradeLookup() {
     const [grade, setGrade] = useState("");
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [ghanaUniversities, setGhanaUniversities] = useState([]);
+
+    const [selectedState, setSelectedState] = useState("");
+    const [selectedCity, setSelectedCity] = useState("");
+    const [nigeriaUniversities, setNigeriaUniversities] = useState([]);
+    const [chinaUniversities, setChinaUniversities] = useState([]);
+    const [indiaUniversities, setIndiaUniversities] = useState([]);
+
+
+
+    const [error, setError] = useState(null);
+
 
     const apiEndpoints = {
         ghana: "http://localhost:5000/get_grade_point",
         china: "http://localhost:5000/get_China_grade_point",
         nigeria: "http://localhost:5000/get_Nigeria_grade_point",
         india: "http://localhost:5000/get_India_grade_point",
+    };
+
+    const fetchUniversityList = async () => {
+        try {
+            const response = await fetch("http://localhost:5000/get_ghana_universities");
+            const data = await response.json();
+            setGhanaUniversities(data);
+        } catch (error) {
+            console.error("Error fetching university list:", error);
+        }
+    };
+
+    const fetchNigeriaUniversities = async () => {
+        try {
+            const response = await fetch("http://localhost:5000/get_nigeria_universities");
+            const data = await response.json();
+            setNigeriaUniversities(data);
+        } catch (error) {
+            console.error("Error fetching Nigeria universities", error);
+        }
+    };
+
+
+    const handleCountrySelect = (country) => {
+        setSelectedCountry(country);
+        setResult(null);
+        setUniversity("");
+        setGrade("");
+        if (country === "ghana") {
+            fetchUniversityList();
+        }
+        if (country === "india") fetchIndiaMetadata();
+        if (country === "nigeria") fetchNigeriaUniversities();
+        if (country === "china") {
+            const fetchChinaUniversities = async () => {
+                try {
+                    const response = await fetch("http://localhost:5000/get_china_universities");
+                    const data = await response.json();
+                    setChinaUniversities(data);
+                } catch (error) {
+                    console.error("Error fetching China universities", error);
+                }
+            };
+            fetchChinaUniversities();
+        }
+
     };
 
     const fetchGradePoint = async () => {
@@ -31,14 +89,32 @@ export default function GradeLookup() {
             if (response.ok) {
                 setResult(data);
             } else {
-                alert(data.error || "Failed to fetch data");
+                let message = data.error || "Failed to fetch data";
+                if (data.valid_formats) {
+                    message += `\nValid formats used by this university: ${data.valid_formats.join(", ")}`;
+                }
+                alert(message);
                 setResult(null);
             }
         } catch (error) {
-            alert("Error fetching data");
+            setError({ message: "Error fetching data", formats: null });
+            setResult(null);
         }
         setLoading(false);
     };
+
+    const fetchIndiaMetadata = async () => {
+        try {
+            const response = await fetch("http://localhost:5000/get_india_universities");
+            const data = await response.json();
+            setIndiaUniversities(data); // This now contains [{Display, Name of the University}]
+        } catch (error) {
+            console.error("Error fetching India metadata:", error);
+        }
+    };
+
+
+
 
     return (
         <div style={{
@@ -55,12 +131,7 @@ export default function GradeLookup() {
                 {Object.keys(apiEndpoints).map((country) => (
                     <button
                         key={country}
-                        onClick={() => {
-                            setSelectedCountry(country);
-                            setResult(null);
-                            setUniversity("");
-                            setGrade("");
-                        }}
+                        onClick={() => handleCountrySelect(country)}
                         style={{
                             margin: "5px",
                             padding: "10px",
@@ -91,16 +162,83 @@ export default function GradeLookup() {
                     width: "350px"
                 }}>
                     <h3>Grade Lookup for {selectedCountry.toUpperCase()}</h3>
-                    <div style={{ marginBottom: "10px", width: "100%" }}>
-                        <label>University: </label>
-                        <input
-                            type="text"
-                            placeholder="Enter university Name"
-                            value={university}
-                            onChange={(e) => setUniversity(e.target.value)}
-                            style={{ width: "100%", padding: "8px", borderRadius: "5px", border: "1px solid #ccc" }}
-                        />
+
+                    <div style={{ marginBottom: "10px", textAlign: "right", width: "100%" }}>
+                        <a
+                            href={`http://localhost:5000/download/${selectedCountry}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                display: "inline-block",
+                                textDecoration: "none",
+                                fontSize: "18px",
+                                padding: "6px 10px",
+                                backgroundColor: "#f0f0f0",
+                                borderRadius: "50%",
+                                cursor: "pointer",
+                                boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
+                            }}
+                            title={`Download ${selectedCountry.toUpperCase()} Excel`}
+                        >
+                            📥
+                        </a>
                     </div>
+
+
+
+
+                    {/* India-specific cascading dropdowns */}
+                    {selectedCountry === "india" ? (
+                        <div style={{ marginBottom: "10px", width: "100%" }}>
+                            <label>University:</label>
+                            <select
+                                value={university}
+                                onChange={(e) => setUniversity(e.target.value)}
+                                style={{ width: "100%", padding: "8px", borderRadius: "5px", border: "1px solid #ccc" }}
+                            >
+                                <option value="">Select a university</option>
+                                {indiaUniversities.map((item, idx) => (
+                                    <option key={idx} value={item["Name of the University"]}>
+                                        {item.Display}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    ) : (
+
+
+                        // Ghana and others remain as is
+                        <div style={{ marginBottom: "10px", width: "100%" }}>
+                            <label>University: </label>
+                            {(selectedCountry === "ghana" || selectedCountry === "nigeria" || selectedCountry === "china") ? (
+                                <select
+                                    value={university}
+                                    onChange={(e) => setUniversity(e.target.value)}
+                                    style={{ width: "100%", padding: "8px", borderRadius: "5px", border: "1px solid #ccc" }}
+                                >
+                                    <option value="">Select a university</option>
+                                    {(selectedCountry === "ghana"
+                                        ? ghanaUniversities
+                                        : selectedCountry === "nigeria"
+                                            ? nigeriaUniversities
+                                            : chinaUniversities).map((uni, idx) => (
+                                                <option key={idx} value={uni}>{uni}</option>
+                                            ))}
+                                </select>
+                            ) : (
+                                <input
+                                    type="text"
+                                    placeholder="Enter university Name"
+                                    value={university}
+                                    onChange={(e) => setUniversity(e.target.value)}
+                                    style={{ width: "100%", padding: "8px", borderRadius: "5px", border: "1px solid #ccc" }}
+                                />
+                            )}
+                        </div>
+                    )}
+
+
+                    {/* Grade Input */}
                     <div style={{ marginBottom: "10px", width: "100%" }}>
                         <label>Grade: </label>
                         <input
@@ -111,6 +249,7 @@ export default function GradeLookup() {
                             style={{ width: "100%", padding: "8px", borderRadius: "5px", border: "1px solid #ccc" }}
                         />
                     </div>
+
                     <button
                         onClick={fetchGradePoint}
                         disabled={loading}
@@ -129,6 +268,7 @@ export default function GradeLookup() {
                         {loading ? "Fetching..." : "Get Equivalent Score"}
                     </button>
 
+                    {/* Results */}
                     {result && (
                         <div style={{
                             background: "#fff",
@@ -165,4 +305,3 @@ export default function GradeLookup() {
         </div>
     );
 }
-

@@ -5,21 +5,43 @@ from flask import request, jsonify
 def setup():
     pass
 
-def get_grade_point_nigeria():
-    file_path = "University List.xlsx"
+# ✅ New: Nigeria university list endpoint
+def get_nigeria_universities():
+    file_path = "Nigeria List.xlsx"
 
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Error: The file '{file_path}' was not found.")
+        return jsonify({"error": f"The file '{file_path}' was not found."}), 404
 
-    xls = pd.ExcelFile(file_path)
+    xls = pd.ExcelFile(file_path, engine='openpyxl')
+    required_sheet = "Nigeria University List"
+    if required_sheet not in xls.sheet_names:
+        return jsonify({"error": f"Missing sheet: {required_sheet}"}), 404
+
+    university_df = pd.read_excel(xls, sheet_name=required_sheet)
+    university_df.columns = university_df.columns.str.strip()
+
+    if "University List" not in university_df.columns:
+        return jsonify({"error": "'University List' column not found"}), 400
+
+    universities = university_df["University List"].dropna().drop_duplicates().sort_values().tolist()
+    return jsonify(universities)
+
+# ✅ Main grade point lookup for Nigeria
+def get_grade_point_nigeria():
+    file_path = "Nigeria List.xlsx"
+
+    if not os.path.exists(file_path):
+        return jsonify({"error": f"The file '{file_path}' was not found."}), 404
+
+    xls = pd.ExcelFile(file_path, engine='openpyxl')
     required_sheets = ["Nigeria University List", "Nigeria Formats"]
     missing_sheets = [sheet for sheet in required_sheets if sheet not in xls.sheet_names]
 
     if missing_sheets:
-        raise ValueError(f"Missing required sheets: {missing_sheets}")
+        return jsonify({"error": f"Missing required sheets: {missing_sheets}"}), 404
 
-    university_df = pd.read_excel(xls, sheet_name="Nigeria University List")
-    format_df = pd.read_excel(xls, sheet_name="Nigeria Formats", header=None)
+    university_df = pd.read_excel(xls, sheet_name="Nigeria University List", engine='openpyxl')
+    format_df = pd.read_excel(xls, sheet_name="Nigeria Formats", header=None, engine='openpyxl')
     format_df.rename(columns={0: "Format"}, inplace=True)
 
     university_df.columns = university_df.columns.str.strip()
@@ -28,7 +50,7 @@ def get_grade_point_nigeria():
 
     required_columns = {"University List", "Format"}
     if not required_columns.issubset(university_df.columns):
-        raise ValueError(f"Missing required columns: {required_columns - set(university_df.columns)}")
+        return jsonify({"error": f"Missing required columns: {required_columns - set(university_df.columns)}"}), 400
 
     university_mapping = {
         row["University List"].strip().lower(): [fmt.strip().lower() for fmt in str(row["Format"]).split(" / ") if pd.notna(row["Format"])]
@@ -48,41 +70,38 @@ def get_grade_point_nigeria():
 
     all_results = []
 
-    for format_name in applicable_formats:
-        format_name = format_name.strip().lower()
-        format_data = format_df[format_df["Format"] == format_name].reset_index(drop=True)
+    format_data_us = format_df[format_df["Format"].isin(["format / us grade points", "format"])]
+    if format_data_us.empty:
+        return jsonify({"error": "US grade points format not found"}), 404
 
+    us_scores_row = format_data_us.iloc[0, 1:].dropna().astype(float).tolist()
+
+    try:
+        student_grade_float = float(student_grade)
+        is_numeric = True
+    except ValueError:
+        is_numeric = False
+
+    for format_name in applicable_formats:
+        format_data = format_df[format_df["Format"] == format_name.strip().lower()].reset_index(drop=True)
         if format_data.empty:
             continue
 
         grades_values = format_data.iloc[0, 1:].astype(str).str.strip().tolist()
         grades_values = [g.replace("＋", "+") for g in grades_values]
 
-        format_data_us = format_df[format_df["Format"].isin(["format / us grade points", "format"])].reset_index(drop=True)
-
-        if format_data_us.empty:
-            continue
-
-        us_scores_row = format_data_us.iloc[0, 1:].dropna().astype(float).tolist()
-
         indices = [i for i, grade in enumerate(grades_values) if grade.strip().lower() == student_grade.strip().lower()]
+        if indices:
+            equivalent_scores = [us_scores_row[i] for i in indices if i < len(us_scores_row)]
+            if equivalent_scores:
+                return jsonify({
+                    "university": university,
+                    "grade": student_grade,
+                    "format": format_name,
+                    "us_equivalent_scores": equivalent_scores
+                })
 
-        equivalent_scores = []
-        for index in indices:
-            if index < len(us_scores_row):
-                equivalent_scores.append(us_scores_row[index])
-
-        if equivalent_scores:
-            return jsonify({
-                "university": university,
-                "grade": student_grade,
-                "format": format_name,
-                "us_equivalent_scores": equivalent_scores
-            })
-
-        # Handle numeric closest match
-        try:
-            student_grade_float = float(student_grade)
+        if is_numeric:
             numeric_grades = []
             for g in grades_values:
                 try:
@@ -91,7 +110,6 @@ def get_grade_point_nigeria():
                     numeric_grades.append(None)
 
             valid_pairs = [(i, val) for i, val in enumerate(numeric_grades) if val is not None]
-
             closest_below = max((val for i, val in valid_pairs if val <= student_grade_float), default=None)
             closest_above = min((val for i, val in valid_pairs if val >= student_grade_float), default=None)
 
@@ -110,11 +128,12 @@ def get_grade_point_nigeria():
                     "format": format_name,
                     "closest_grade_matches": bounds
                 })
-        except ValueError:
-            continue
 
     if all_results:
-        return jsonify(all_results[0])
+        complete = [res for res in all_results if len(res.get("closest_grade_matches", [])) >= 2]
+        return jsonify(complete[0] if complete else all_results[0])
 
-    return jsonify({"error": "Grade not found in the university's formats"}), 404
-
+    return jsonify({
+        "error": f"Grade '{student_grade}' was not found in any format for '{university}'.",
+        "valid_formats": applicable_formats
+    }), 404
